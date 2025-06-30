@@ -69,3 +69,7 @@ Earlier versions of this relied on normalising the TTF via Glyphs to fix up the 
  * https://forum.glyphsapp.com/t/pngs-in-sbix-exports-are-converted-from-8-bit-palette-to-32-bit-rgba/11787 (Glyphs expands PNGs from 8-bit to 32-bit on export)
 
 ...so instead, layerize has been fixed up to generate TTX which looks to work in practice.
+
+### fix some svg
+
+cp 274c.svg 1f1f9-1f1fc.svg in svg dir, then zip it.
