@@ -1,6 +1,6 @@
 var fs         = require('fs'),
     rmdir      = require('rmdir'),
-    unzip      = require('unzip'),
+    AdmZip     = require('adm-zip'),
     xmlbuilder = require('xmlbuilder'),
     xml2js     = require('xml2js');
 
@@ -437,6 +437,18 @@ function processFile(fileName, data) {
     fs.writeFileSync(targetDir + "/colorGlyphs/u" + baseName + ".svg", data);
 
     parser.parseString(data, function (err, result) {
+        if (err) {
+            console.error('### XML parsing error for file ' + fileName + ':', err.message);
+            console.error('### File content preview:', data.substring(0, 200) + '...');
+            return;
+        }
+        
+        if (!result || !result['svg']) {
+            console.error('### Invalid SVG structure for file ' + fileName);
+            console.error('### File content preview:', data.substring(0, 200) + '...');
+            return;
+        }
+        
         var paths = [];
         var defs = {};
         var urlColor = {};
@@ -1057,28 +1069,34 @@ rmdir(targetDir, function() {
     var overrides = fs.readdirSync(overridesDir);
 
     // Finally, we're ready to process the images from the main source archive:
-    fs.createReadStream(sourceZip).pipe(unzip.Parse()).on('entry', function (e) {
-        var data = "";
-        var fileName = e.path.replace(/^.*\//, ""); // strip any directory names
-        if (e.type == 'File') {
+    var zip = new AdmZip(sourceZip);
+    var zipEntries = zip.getEntries();
+
+    zipEntries.forEach(function(entry) {
+        var fileName = entry.entryName.replace(/^.*\//, ""); // strip any directory names
+        if (!entry.isDirectory && fileName.endsWith('.svg')) {
+            console.log('Processing file:', fileName);
             // Check for an override; if present, read that instead
             var o = overrides.indexOf(fileName);
             if (o >= 0) {
                 console.log("overriding " + fileName + " with local copy");
-                data = fs.readFileSync(overridesDir + "/" + fileName);
+                var data = fs.readFileSync(overridesDir + "/" + fileName, 'utf8');
                 processFile(fileName, data);
                 overrides.splice(o, 1);
-                e.autodrain();
             } else {
-                e.on("data", function (c) {
-                    data += c.toString();
-                });
-                e.on("end", function () {
+                try {
+                    var data = entry.getData().toString('utf8');
+                    if (data.trim().length === 0) {
+                        console.error('### Empty file:', fileName);
+                        return;
+                    }
                     processFile(fileName, data);
-                });
+                } catch (e) {
+                    console.error('### Error reading file ' + fileName + ':', e.message);
+                }
             }
-        } else {
-            e.autodrain();
         }
-    }).on('close', generateTTX);
+    });
+
+    generateTTX();
 });
